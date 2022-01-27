@@ -11,10 +11,11 @@
 ////////////////////////////////////////////////
 /** @jsx Didact.createElement */
 
-///////////////// vars ////////////////////////////////////////////
+///////////////// VARS ////////////////////////////////////////////
 let nextUnitOfWork = null;
+let wipRoot = null;
 
-///////////////// enums ////////////////////////////////////////////
+///////////////// ENUMS ////////////////////////////////////////////
 const elementTypes = Object.freeze({ TEXT_ELEMENT: "TEXT_ELEMENT" });
 
 ///////////////// apis ////////////////////////////////////////////
@@ -51,22 +52,16 @@ const createDom = (fiber) => {
       dom[name] = fiber.props[name];
     });
 
-  fiber.props.children.map((child) => render(child, dom));
+  // fiber.props.children.map((child) => render(child, dom));
 
   return dom;
 };
 // perform unit of work
 const performUnitOfWork = (fiber) => {
-  console.log("processing ", fiber);
-
   if (!fiber.dom) {
     fiber.dom = createDom(fiber);
   }
-
-  if (fiber.parent) {
-    fiber.parent.dom.appendChild(fiber.dom);
-  }
-
+  // get children
   const elements = fiber.props.children;
   let index = 0;
   let prevSibling = null;
@@ -89,40 +84,67 @@ const performUnitOfWork = (fiber) => {
     prevSibling = newFiber;
     index++;
   }
-  console.log("processing ended");
+
   // next unit of work child=>sibling=>uncle
+  // first next unit if work should be the its child if any
   if (fiber.child) {
     return fiber.child;
   }
 
+  //  if childless, next unit of work is the nextSibling(s)
   let nextFiber = fiber;
   while (nextFiber) {
     if (nextFiber.sibling) {
       return nextFiber.sibling;
     }
-
+    // if it has no sibling then next unit is the uncle if any
     nextFiber = nextFiber.parent;
   }
 };
 
 // workloop
+// deadline :requestIdleCallbackObject   props {timeRemaining: fn. }
 const workloop = (deadline) => {
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     let timeRemaining = deadline.timeRemaining();
     shouldYield = timeRemaining < 1;
-    console.log(shouldYield, timeRemaining);
+  }
+
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot();
   }
 
   window.requestIdleCallback(workloop);
 };
 
-const render = (element, container) => {
-  // set nextunitOfWork to the root of the fiber tree
-  nextUnitOfWork = { dom: container, props: { children: [element] } };
+// commitRoot
+const commitRoot = () => {
+  commitWork(wipRoot.child);
+  wipRoot = null;
+};
 
-  //  start asynchronous rendering;
+// commitWork
+const commitWork = (fiber) => {
+  if (!fiber) {
+    return;
+  }
+  const domParent = fiber.parent.dom;
+  domParent.appendChild(fiber.dom);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+};
+
+const render = (element, container) => {
+  // keep track of the root of the fiber tree
+
+  wipRoot = { dom: container, props: { children: [element] } };
+
+  // set the next unit of work
+  nextUnitOfWork = wipRoot;
+
+  // start asynchronous rendering;
   window.requestIdleCallback(workloop);
 };
 
@@ -135,7 +157,8 @@ const element = (
     <a>bar</a>
     <b />
     <div>
-      baz<p>boo</p>
+      <p>boo</p>
+      <span style="background:blue">baz</span>
     </div>
   </div>
 );
