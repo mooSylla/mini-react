@@ -1,0 +1,2 @@
+reconciliation =>https://github.com/pomber/didact/blob/21dc97cd58d34c62f3ca629460a7b0325bd48aa9/didact.js
+
