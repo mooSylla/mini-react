@@ -120,7 +120,7 @@ const performUnitOfWork = (fiber) => {
 const reconcileChildren = (wipFiber, elements) => {
   let index = 0;
   let previousSibling = null;
-  let oldFiber = wipFiber.alternate && wipFiber.alternate.fiber;
+  let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
 
   while (index < elements.length || oldFiber) {
     const element = elements[index];
@@ -208,7 +208,7 @@ const commitWork = (fiber) => {
   } else if (fiber.effectTag === "DELETION" && fiber.dom != null) {
     domParent.removeChild(fiber.dom);
   } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
-    updateDom(fiber.dom, fiber.alternate.props, fiber, props);
+    updateDom(fiber.dom, fiber.alternate.props, fiber.props);
   }
 
   commitWork(fiber.child);
@@ -224,7 +224,7 @@ const updateDom = (dom, prevProps, nextProps) => {
   // remove old props(attributes)
   Object.keys(prevProps)
     .filter(isProperty)
-    .filter(isGone(prev, next))
+    .filter(isGone(prevProps, nextProps))
     .forEach((name) => (dom[name] = ""));
 
   // remove old or changed event listeners
@@ -246,8 +246,10 @@ const updateDom = (dom, prevProps, nextProps) => {
     });
 
   // set new or changed properties
-  Object.keys(nextProps).filter(isProperty).filter(isNew(prevProps, nextProps));
-  forEach((name) => (dom[name] = nextProps[name]));
+  Object.keys(nextProps)
+    .filter(isProperty)
+    .filter(isNew(prevProps, nextProps))
+    .forEach((name) => (dom[name] = nextProps[name]));
 };
 
 const render = (element, container) => {
