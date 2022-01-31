@@ -68,36 +68,33 @@ const createDom = (fiber) => {
 
   return dom;
 };
-// perform unit of work
-const performUnitOfWork = (fiber) => {
+// updateFunctionComponent
+const updateFunctionComponent = (fiber) => {
+  const children = [fiber.type(fiber.props)];
+
+  reconcileChildren(fiber, children);
+};
+
+// updateHostComponent
+const updateHostComponent = (fiber) => {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber);
   }
-  // get children
   const elements = fiber.props.children;
-  // let index = 0;
-  // let prevSibling = null;
-  // // CREATE children fibers and assign sibling if any
-  // while (index < elements.length) {
-  //   const currentEl = elements[index];
-
-  //   const newFiber = {
-  //     dom: null,
-  //     type: currentEl.type,
-  //     props: currentEl.props,
-  //     parent: fiber,
-  //   };
-
-  //   if (index === 0) {
-  //     fiber.child = newFiber;
-  //   } else {
-  //     prevSibling.sibling = newFiber;
-  //   }
-  //   prevSibling = newFiber;
-  //   index++;
-  // }
-
   reconcileChildren(fiber, elements);
+};
+
+// perform unit of work
+const performUnitOfWork = (fiber) => {
+  const isFunctionComponent = fiber.type instanceof Function;
+
+  if (isFunctionComponent) {
+    // handle function component
+    updateFunctionComponent(fiber);
+  } else {
+    // handle host component
+    updateHostComponent(fiber);
+  }
 
   // next unit of work child=>sibling=>uncle
   // first next unit if work should be the its child if any
@@ -201,18 +198,32 @@ const commitWork = (fiber) => {
     return;
   }
 
-  const domParent = fiber.parent.dom;
+  let parentFiber = fiber.parent;
+  while (!parentFiber.dom) {
+    parentFiber = parentFiber.parent;
+  }
+
+  // const domParent = fiber.parent.dom;
+  const domParent = parentFiber.dom;
 
   if (fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
     domParent.appendChild(fiber.dom);
   } else if (fiber.effectTag === "DELETION" && fiber.dom != null) {
-    domParent.removeChild(fiber.dom);
+    // domParent.removeChild(fiber.dom);
+    commitDeletion(fiber, domParent);
   } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
     updateDom(fiber.dom, fiber.alternate.props, fiber.props);
   }
 
   commitWork(fiber.child);
   commitWork(fiber.sibling);
+};
+const commitDeletion = (fiber, domParent) => {
+  if (fiber.child.dom) {
+    domParent.removeChild(fiber);
+  } else {
+    commitDeletion(fiber.child, domParent);
+  }
 };
 
 const isGone = (next) => (key) => !(key in next);
@@ -273,11 +284,18 @@ const Didact = { createElement, createTextElement, render };
 
 const container = document.getElementById("root");
 
+const Title = (props) => (
+  <h3>
+    Create your own <strong>{props.label}</strong>
+  </h3>
+);
+
 const updateValue = (e) => rerender(e.target.value);
 
 const rerender = (value = "") => {
   const element = (
     <div>
+      <Title label="react" />
       <input onInput={updateValue} value={value} />
       <h1>Hello {value}</h1>
     </div>
