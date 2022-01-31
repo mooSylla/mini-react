@@ -17,6 +17,8 @@ let nextUnitOfWork = null;
 let wipRoot = null;
 let currentRoot = null;
 let deletion = null;
+let wipFiber = {};
+let hookIndex = 0;
 
 ///////////////// ENUMS ////////////////////////////////////////////
 const elementTypes = Object.freeze({ TEXT_ELEMENT: "TEXT_ELEMENT" });
@@ -25,6 +27,41 @@ const elementTypes = Object.freeze({ TEXT_ELEMENT: "TEXT_ELEMENT" });
 const isProperty = (key) => key !== "children";
 
 ///////////////// apis ////////////////////////////////////////////
+
+//useState
+const useState = (initial) => {
+  console.log("running useState");
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hook = { state: oldHook ? oldHook.state : initial, queue: [] };
+
+  const actions = oldHook ? oldHook.queue : [];
+
+  actions.forEach((action) => {
+    hook.state = action(hook.state);
+  });
+
+  const setState = (action) => {
+    hook.queue.push(action);
+
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    };
+
+    nextUnitOfWork = wipRoot;
+    deletion = [];
+  };
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+
+  return [hook.state, setState];
+};
 
 // create fiber
 const createElement = (type, props, ...children) => ({
@@ -36,6 +73,7 @@ const createElement = (type, props, ...children) => ({
     ),
   },
 });
+
 // create fiber for text
 const createTextElement = (text) => ({
   type: elementTypes.TEXT_ELEMENT,
@@ -68,10 +106,14 @@ const createDom = (fiber) => {
 
   return dom;
 };
+
 // updateFunctionComponent
 const updateFunctionComponent = (fiber) => {
-  const children = [fiber.type(fiber.props)];
+  wipFiber = fiber;
+  hookIndex = 0;
+  wipFiber.hooks = [];
 
+  const children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children);
 };
 
@@ -278,11 +320,22 @@ const render = (element, container) => {
   nextUnitOfWork = wipRoot;
 };
 
-const Didact = { createElement, createTextElement, render };
+const Didact = { createElement, createTextElement, render, useState };
 
 /////////////////////////////////////////////////////////////
 
 const container = document.getElementById("root");
+
+const Counter = () => {
+  const [counter, setCounter] = Didact.useState(1);
+  console.log(counter);
+  return (
+    <span>
+      {counter}
+      <button onClick={() => setCounter((prev) => prev + 1)}>+</button>
+    </span>
+  );
+};
 
 const Title = (props) => (
   <h3>
@@ -295,6 +348,7 @@ const updateValue = (e) => rerender(e.target.value);
 const rerender = (value = "") => {
   const element = (
     <div>
+      <Counter />
       <Title label="react" />
       <input onInput={updateValue} value={value} />
       <h1>Hello {value}</h1>
